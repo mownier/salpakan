@@ -1,0 +1,3 @@
+[submodule "lib/ifmoan"]
+	path = lib/ifmoan
+	url = https://github.com/mownier/ifmoan
