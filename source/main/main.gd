@@ -75,3 +75,9 @@ func on_join_success():
 func goto_lobby(id):
 	global.set_lobby_id(id)
 	global.goto_lobby()
+
+func is_valid_input():
+	return not lobby_id.get_text().empty()
+
+func get_lobby_id():
+	return lobby_id.get_text()
