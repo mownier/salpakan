@@ -24,7 +24,7 @@ func on_connect():
 		firebase = global.create_firebase(url)
 		firebase.connect("firebase_on_success", self, "firebase_on_success")
 		firebase.connect("firebase_on_error", self, "firebase_on_error")
-		firebase.post("/connections", data.to_json())
+		firebase.post("/connection", data.to_json())
 		
 	else:
 		show_error("Fill the fields appropriately.")
