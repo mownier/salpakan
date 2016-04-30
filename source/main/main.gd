@@ -23,10 +23,21 @@ func _ready():
 	disconnect.connect("pressed", self, "on_disconnect")
 
 func on_join():
-	pass
+	if is_valid_input():
+		var lobby = get_lobby_id()
+		var id = global.get_connection_id()
+		var player = global.get_connected_player()
+		var data = {id: {"player": player}}
+		var path = str("/lobby/", lobby, "/connected")
+		join_request = firebase.patch(path, data.to_json())
+	else:
+		show_error("Lobby id is empty.")
 
 func on_create():
-	pass
+	var id = global.get_connection_id()
+	var player = global.get_connected_player()
+	var data = {"connected": {id: {"player": player}}}
+	create_request = firebase.post("/lobby", data.to_json())
 
 func on_disconnect():
 	var connection_id = global.get_connection_id()
