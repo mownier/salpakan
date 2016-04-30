@@ -75,6 +75,9 @@ func goto_login():
 func goto_lobby():
 	get_tree().change_scene("res://source/lobby/lobby.scn")
 
+func goto_game():
+	get_tree().change_scene("res://source/game/game.scn")
+
 class Storage extends Reference:
 	
 	var path
