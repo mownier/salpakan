@@ -7,6 +7,7 @@ var pool = Pool.new(12)
 var storage = Storage.new("user://data.db", "XDvJ3YiQ9ouVoPiSIchR")
 var connection
 var lobby_id
+var Piece = preload("res://source/game/piece.scn")
 
 func _ready():
 	connection = get_connection()
@@ -77,6 +78,41 @@ func goto_lobby():
 
 func goto_game():
 	get_tree().change_scene("res://source/game/game.scn")
+
+func get_opponent_pieces(color):
+	return get_pieces(color)
+
+func get_player_pieces(color):
+	return get_pieces(color)
+
+func get_pieces(color):
+	var pieces = []
+	var keys = []
+	if color == "white":
+		keys = [
+			"W_G_5", "W_G_4",   "W_G_3", "W_G_2", "W_G_1",\
+			"W_COL", "W_L_COL", "W_MAJ", "W_SGT", "W_PVT",\
+			"W_CAP", "W_L_1",   "W_L_2", "W_FLG", "W_SPY"]
+	elif color == "black":
+		keys = [
+			"B_G_5", "B_G_4",   "B_G_3", "B_G_2", "B_G_1",\
+			"B_COL", "B_L_COL", "B_MAJ", "B_SGT", "B_PVT",\
+			"B_CAP", "B_L_1",   "B_L_2", "B_FLG", "B_SPY"]
+	
+	for key in keys:
+		var count = 1
+		if key.ends_with("_PVT"):
+			count = 6
+		elif key.ends_with("_SPY"):
+			count = 2
+		
+		for i in range(count):
+			var piece = Piece.instance()
+			piece.type = key
+			pieces.push_back(piece)
+	
+	return pieces
+
 
 class Storage extends Reference:
 	
