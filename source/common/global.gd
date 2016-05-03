@@ -1,6 +1,9 @@
 
 extends Node
 
+const PIECE_WHITE = "white"
+const PIECE_BLACK = "black"
+
 var Firebase = preload("res://lib/ifmoan/firebase/firebase.gd")
 var Pool = preload("res://lib/ifmoan/thread-pool/thread_pool.gd")
 var pool = Pool.new(12)
@@ -8,6 +11,24 @@ var storage = Storage.new("user://data.db", "XDvJ3YiQ9ouVoPiSIchR")
 var connection
 var lobby_id
 var Piece = preload("res://source/game/piece.scn")
+
+const PIECE_ATTRIB = {
+	SPY = { rank = 15, white = Vector2(288, 128), black = Vector2(288, 320) },
+	G_5 = { rank = 14, white = Vector2(0, 0), black = Vector2(0, 192) },
+	G_4 = { rank = 13, white = Vector2(72, 0), black = Vector2(72, 192) },
+	G_3 = { rank = 12, white = Vector2(144, 0), black = Vector2(144, 192) },
+	G_2 = { rank = 11, white = Vector2(216, 0), black = Vector2(216, 192) },
+	G_1 = { rank = 10, white = Vector2(288, 0), black = Vector2(288, 192) },
+	COL = { rank = 9, white = Vector2(0, 64), black = Vector2(0, 256) },
+	L_COL = { rank = 8, white = Vector2(72, 64), black = Vector2(72, 256) },
+	MAJ = { rank = 7, white = Vector2(144, 64), black = Vector2(144, 256) },
+	CAP = { rank = 6, white = Vector2(0, 128), black = Vector2(0, 320) },
+	L_1 = { rank = 5, white = Vector2(72, 128), black = Vector2(72, 320) },
+	L_2 = { rank = 5, white = Vector2(144, 128), black = Vector2(144, 320) },
+	SGT = { rank = 4, white = Vector2(216, 64), black = Vector2(216, 256) },
+	PVT = { rank = 2, white = Vector2(288, 64), black = Vector2(288, 256) },
+	FLG = { rank = 1, white = Vector2(216, 128), black = Vector2(216, 320) }
+}
 
 func _ready():
 	connection = get_connection()
@@ -87,28 +108,22 @@ func get_player_pieces(color):
 
 func get_pieces(color):
 	var pieces = []
-	var keys = []
-	if color == "white":
-		keys = [
-			"W_G_5", "W_G_4",   "W_G_3", "W_G_2", "W_G_1",\
-			"W_COL", "W_L_COL", "W_MAJ", "W_SGT", "W_PVT",\
-			"W_CAP", "W_L_1",   "W_L_2", "W_FLG", "W_SPY"]
-	elif color == "black":
-		keys = [
-			"B_G_5", "B_G_4",   "B_G_3", "B_G_2", "B_G_1",\
-			"B_COL", "B_L_COL", "B_MAJ", "B_SGT", "B_PVT",\
-			"B_CAP", "B_L_1",   "B_L_2", "B_FLG", "B_SPY"]
 	
-	for key in keys:
+	for key in PIECE_ATTRIB:
 		var count = 1
-		if key.ends_with("_PVT"):
+		if key == "PVT":
 			count = 6
-		elif key.ends_with("_SPY"):
+		elif key == "SPY":
 			count = 2
 		
+		var info = PIECE_ATTRIB[key]
 		for i in range(count):
 			var piece = Piece.instance()
-			piece.type = key
+			var pos = info[color]
+			var rank = info["rank"]
+			piece.set_region_position(pos)
+			piece.set_type(color)
+			piece.set_rank(rank)
 			pieces.push_back(piece)
 	
 	return pieces
