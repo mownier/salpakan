@@ -121,9 +121,11 @@ func get_pieces(color):
 			var piece = Piece.instance()
 			var pos = info[color]
 			var rank = info["rank"]
+			var cover = str("res://assets/cover_", color, ".png")
 			piece.set_region_position(pos)
 			piece.set_type(color)
 			piece.set_rank(rank)
+			piece.set_cover(cover)
 			pieces.push_back(piece)
 	
 	return pieces
