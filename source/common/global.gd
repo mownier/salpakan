@@ -79,13 +79,16 @@ func get_connection_info(key):
 		return ""
 
 func get_connection():
-	var json = storage.read()
-	if json.empty():
-		return Dictionary()
+	if connection == null:
+		var json = storage.read()
+		if json.empty():
+			return Dictionary()
+		else:
+			var info = Dictionary()
+			info.parse_json(json)
+			return info
 	else:
-		var info = Dictionary()
-		info.parse_json(json)
-		return info
+		return connection
 
 func break_connection():
 	connection.clear()
