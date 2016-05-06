@@ -2,16 +2,20 @@
 extends Node2D
 
 onready var global = get_node("/root/global")
-onready var lobby_id = get_node("container/lobby_id")
-onready var join = get_node("container/join")
-onready var create = get_node("container/create")
-onready var disconnect = get_node("container/disconnect")
+onready var join = get_node("join")
+onready var create = get_node("create")
+onready var disconnect = get_node("disconnect")
+onready var refresh = get_node("refresh")
 onready var error_dialog = get_node("error_dialog")
+onready var lobby_detail = get_node("lobby_detail")
+onready var lobby_list = get_node("lobby_list")
 
 var firebase
 var disconnect_request
 var join_request
 var create_request
+var refresh_request
+var selected_lobby
 
 func _ready():
 	firebase = global.create_firebase()
@@ -21,36 +25,58 @@ func _ready():
 	join.connect("pressed", self, "on_join")
 	create.connect("pressed", self, "on_create")
 	disconnect.connect("pressed", self, "on_disconnect")
+	refresh.connect("pressed", self, "on_refresh")
+	lobby_list.connect("item_selected", self, "on_lobby_selected")
+	
+	join.set_disabled(true)
+	
+	on_refresh()
 
 func on_join():
-	if is_valid_input():
-		var lobby = get_lobby_id()
-		var id = global.get_connection_id()
-		var player = global.get_connected_player()
-		var data = {id: {"player": player}}
-		var path = str("/lobby/", lobby, "/connected")
-		join_request = firebase.patch(path, data.to_json())
-	else:
-		show_error("Lobby id is empty.")
-
-func on_create():
+	var lobby = selected_lobby["id"]
 	var id = global.get_connection_id()
 	var player = global.get_connected_player()
-	var data = {"connected": {id: {"player": player}}}
-	create_request = firebase.post("/lobby", data.to_json())
+	var data = {id: {"player": player}}
+	var path = str("/lobby/", lobby, "/connected")
+	join_request = firebase.patch(path, data.to_json())
+
+func on_create():
+	var lobby_id = str("lobby_", OS.get_unix_time())
+	var id = global.get_connection_id()
+	var player = global.get_connected_player()
+	var data = {"id": lobby_id, "connected": {id: {"player": player}}}
+	var path = str("/lobby/", lobby_id)
+	create_request = firebase.patch(path, data.to_json())
 
 func on_disconnect():
 	var connection_id = global.get_connection_id()
 	var path = str("/connections/", connection_id)
 	disconnect_request = firebase.delete(path)
 
+func on_refresh():
+	refresh_request = firebase.get("/lobby")
+
+func on_lobby_selected(index):
+	if join.is_disabled():
+		join.set_disabled(false)
+	
+	selected_lobby = lobby_list.get_item_metadata(index)
+	lobby_detail.set_text("")
+	var text = "connected:\n"
+	var connected = selected_lobby["connected"]
+	for id in connected:
+		text += "> " + connected[id]["player"] + "\n"
+	lobby_detail.set_text(text)
+
 func firebase_on_success(firebase, request, info):
 	if request == disconnect_request:
 		call_deferred("on_disconnect_success")
 	elif request == create_request:
-		call_deferred("on_create_success", info["name"])
+		call_deferred("on_create_success", info["id"])
 	elif request == join_request:
 		call_deferred("on_join_success")
+	elif request == refresh_request:
+		call_deferred("on_refresh_success", Dictionary(info))
 	else:
 		print("Unhandled request...")
 
@@ -69,15 +95,24 @@ func on_create_success(id):
 	goto_lobby(id)
 
 func on_join_success():
-	var id = lobby_id.get_text()
+	var id = selected_lobby["id"]
 	goto_lobby(id)
+
+func on_refresh_success(lobbies):
+	lobby_list.clear()
+	for lobby in lobbies:
+		lobby_list.add_item(lobby)
+		var index = lobby_list.get_item_count() - 1
+		var metadata = Dictionary(lobbies[lobby])
+		metadata["id"] = lobby
+		lobby_list.set_item_metadata(index, metadata)
 
 func goto_lobby(id):
 	global.set_lobby_id(id)
 	global.goto_lobby()
 
 func is_valid_input():
-	return not lobby_id.get_text().empty()
+	return false
 
 func get_lobby_id():
-	return lobby_id.get_text()
+	return ""
