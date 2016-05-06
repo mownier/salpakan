@@ -97,6 +97,9 @@ func break_connection():
 func set_lobby_id(id):
 	lobby_id = id
 
+func get_lobby_id():
+	return lobby_id
+
 func goto_main():
 	get_tree().change_scene("res://source/main/main.scn")
 
