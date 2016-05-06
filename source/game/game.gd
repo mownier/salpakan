@@ -14,18 +14,20 @@ onready var messages = get_node("messages")
 
 var player
 var opponent
+
 var eliminated
 var pre_winner
 var winner
 var turn
+
 var phase = PHASE_INITIAL
 var black_ready = false
 var white_ready = false
 
 func _ready():
-	player = global.PIECE_BLACK
-	opponent = global.PIECE_WHITE
-	
+	player = global.get_player()
+	opponent = global.get_opponent()
+
 	seed(OS.get_unix_time())
 	turn = randi() % 2
 	board.connect("board_on_drop", self, "board_on_drop")
@@ -34,8 +36,8 @@ func _ready():
 	setup_black()
 	setup_white()
 	
-	reveal(opponent, false)
-	freeze(opponent)
+	reveal(opponent.get_color(), false)
+	freeze(opponent.get_color())
 
 func setup_start_buttons():
 	black_start.connect("pressed", self, "on_black_ready")
@@ -83,7 +85,7 @@ func on_ready():
 	white_start.set_hidden(true)
 	
 	var piece = get_current_piece()
-	if piece == player:
+	if piece == player.get_color():
 		unfreeze(piece)
 	
 	send_arbiter_message("turn")
@@ -353,7 +355,7 @@ func configure_next_turn():
 	var next = get_next_piece()
 	var current = get_current_piece()
 	freeze(current)
-	if next == player:
+	if next == player.get_color():
 		unfreeze(next)
 	turn = get_next_turn()
 	
@@ -405,8 +407,8 @@ func send_message(sender, timestamp, message):
 	messages.add_item(text, null, false)
 
 func on_winner_determined():
-	freeze(player)
-	reveal(opponent, true)
+	freeze(player.get_color())
+	reveal(opponent.get_color(), true)
 	send_arbiter_message("win")
 
 func on_clash_split():
@@ -416,8 +418,8 @@ func on_clash_eliminated():
 	send_arbiter_message("eliminated")
 
 func on_game_draw():
-	freeze(player)
-	reveal(opponent, true)
+	freeze(player.get_color())
+	reveal(opponent.get_color(), true)
 	send_arbiter_message("draw")
 
 func on_turn_changed():
