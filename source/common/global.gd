@@ -3,15 +3,6 @@ extends Node
 
 const PIECE_WHITE = "white"
 const PIECE_BLACK = "black"
-
-var Firebase = preload("res://lib/ifmoan/firebase/firebase.gd")
-var Pool = preload("res://lib/ifmoan/thread-pool/thread_pool.gd")
-var pool = Pool.new(12)
-var storage = Storage.new("user://data.db", "XDvJ3YiQ9ouVoPiSIchR")
-var connection
-var lobby_id
-var Piece = preload("res://source/game/piece.scn")
-
 const PIECE_ATTRIB = {
 	SPY = { rank = 15, white = Vector2(288, 128), black = Vector2(288, 320) },
 	G_5 = { rank = 14, white = Vector2(0, 0), black = Vector2(0, 192) },
@@ -29,6 +20,21 @@ const PIECE_ATTRIB = {
 	PVT = { rank = 2, white = Vector2(288, 64), black = Vector2(288, 256) },
 	FLG = { rank = 1, white = Vector2(216, 128), black = Vector2(216, 320) }
 }
+
+var Firebase = preload("res://lib/ifmoan/firebase/firebase.gd")
+var Pool = preload("res://lib/ifmoan/thread-pool/thread_pool.gd")
+var Storage = preload("res://lib/ifmoan/storage/storage.gd")
+var Piece = preload("res://source/game/piece.scn")
+var Player = preload("res://source/common/player.gd")
+
+var pool = Pool.new(12)
+var storage = Storage.new("user://data.db", "XDvJ3YiQ9ouVoPiSIchR")
+
+var connection
+var lobby_id
+
+var player = Player.new()
+var opponent = Player.new()
 
 func _ready():
 	connection = get_connection()
