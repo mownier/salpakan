@@ -142,32 +142,18 @@ func get_pieces(color):
 	
 	return pieces
 
+func set_opponent_info(connection_id, name, color):
+	opponent.set_connection_id(connection_id)
+	opponent.set_name(name)
+	opponent.set_color(color)
 
-class Storage extends Reference:
-	
-	var path
-	var key
-	var writer = File.new()
-	var reader = File.new()
-	
-	func _init(path, key=""):
-		self.path = path
-		self.key = key
-	
-	func write(data, append=true):
-		var content = ""
-		if append:
-			content += read()
-		writer.open(path, File.WRITE)
-		content += str(data)
-		writer.store_string(content)
-		writer.close()
-	
-	func read():
-		var data = ""
-		if reader.file_exists(path):
-			reader.open(path, File.READ)
-			data = reader.get_as_text()
-		if reader.is_open():
-			reader.close()
-		return data
+func set_player_info(connection_id, name, color):
+	player.set_connection_id(connection_id)
+	player.set_name(name)
+	player.set_color(color)
+
+func get_player():
+	return player
+
+func get_opponent():
+	return opponent
