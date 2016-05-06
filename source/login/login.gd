@@ -17,14 +17,16 @@ func _ready():
 
 func on_connect():
 	if is_input_valid():
+		var id = str("connection_", OS.get_unix_time())
 		var url = get_firebase_url()
 		var name = get_player_name()
-		var data = {"player_name": name}
+		var data = {"player_name": name, "id": id}
+		var path = str("/connection/", id)
 		
 		firebase = global.create_firebase(url)
 		firebase.connect("firebase_on_success", self, "firebase_on_success")
 		firebase.connect("firebase_on_error", self, "firebase_on_error")
-		firebase.post("/connection", data.to_json())
+		firebase.patch(path, data.to_json())
 		
 	else:
 		show_error("Fill the fields appropriately.")
@@ -51,7 +53,7 @@ func handle_success(id):
 	global.goto_main()
 
 func firebase_on_success(firebase, request, info):
-	var id = info["name"]
+	var id = info["id"]
 	call_deferred("handle_success", id)
 
 func firebase_on_error(firebase, request, error):
