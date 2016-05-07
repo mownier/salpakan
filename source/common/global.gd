@@ -32,6 +32,7 @@ var storage = Storage.new("user://data.db", "XDvJ3YiQ9ouVoPiSIchR")
 
 var connection
 var lobby_id
+var game_id
 
 var player = Player.new()
 var opponent = Player.new()
@@ -99,6 +100,12 @@ func set_lobby_id(id):
 
 func get_lobby_id():
 	return lobby_id
+
+func set_game_id(id):
+	game_id = id
+
+func get_game_id():
+	return game_id
 
 func goto_main():
 	get_tree().change_scene("res://source/main/main.scn")
