@@ -66,11 +66,9 @@ func setup_start_buttons():
 	white_start.set_pos(Vector2(x, y))
 
 func on_black_ready():
-	set_black_ready(true)
 	send_arbiter_message("ready", global.PIECE_BLACK)
 
 func on_white_ready():
-	set_white_ready(true)
 	send_arbiter_message("ready", global.PIECE_WHITE)
 
 func set_black_ready(ready):
@@ -263,6 +261,7 @@ func board_on_drop(pos, piece):
 		if (is_initial_phase() or 
 			(is_start_phase() and is_adjacent(piece.get_pos(), new_pos))):
 			piece.set_pos(new_pos)
+			on_piece_moved()
 			
 			if is_start_phase():
 				
@@ -381,14 +380,6 @@ func has_pieces(color):
 func reveal(color, show):
 	get_tree().call_group(0, color, "reveal", show)
 
-func configure_next_turn():
-	var next = get_next_piece()
-	var current = get_current_piece()
-	freeze(current)
-	if next == player.get_color():
-		unfreeze(next)
-	turn = get_next_turn()
-
 func has_pre_winner():
 	if (pre_winner != null and 
 		(pre_winner == global.PIECE_WHITE or pre_winner == global.PIECE_BLACK)):
@@ -406,11 +397,12 @@ func has_winner():
 func send_arbiter_message(event, color=null):
 	var message = ""
 	var info = {}
+	var timestamp = OS.get_unix_time()
 	
 	if event == "turn":
 		var next = get_next_piece()
 		message = str(next.to_upper(), "'s turn")
-		info["color"] = next
+		info["color"] = str(next, ",", timestamp)
 		
 	elif event == "win":
 		if has_winner():
@@ -431,11 +423,10 @@ func send_arbiter_message(event, color=null):
 		if color != null and (color == global.PIECE_WHITE or color == global.PIECE_BLACK):
 			var owner = get_piece_owner(color)
 			message = str(owner.get_name(), " is ready")
-			info["color"] = owner.get_color()
+			info["color"] = str(owner.get_color(), ",", timestamp)
 	
 	if not message.empty():
 		var sender = "arbiter"
-		var timestamp = OS.get_unix_time()
 		var evt = str(event,",",timestamp)
 		send_message(sender, timestamp, message, evt, info)
 
@@ -470,7 +461,11 @@ func on_game_draw():
 	send_arbiter_message("draw")
 
 func on_turn_changed():
+	freeze(get_current_piece())
 	send_arbiter_message("turn")
+
+func on_piece_moved(piece, new_pos):
+	pass
 
 func get_piece_owner(color):
 	if player.get_color() == color:
@@ -523,7 +518,7 @@ func firebase_on_stream(firebase, source, event, data):
 				callback = "on_arbiter_event_turn"
 			
 			if callback != null:
-				call_deferred("on_arbiter_event_ready", Dictionary(arbiter_data))
+				call_deferred(callback, Dictionary(arbiter_data))
 
 func append_chat_message(sender, message, timestamp):
 	var text = str("[", sender, "]: ", message)
@@ -532,17 +527,31 @@ func append_chat_message(sender, message, timestamp):
 func on_arbiter_event_ready(data):
 	append_chat_message("arbiter", data["message"], data["timestamp"])
 	if data.has("info") and data["info"].has("color"):
-		var color = data["info"]["color"]
+		var color = data["info"]["color"].split(",", false)[0] 
 		if color == global.PIECE_WHITE:
 			set_white_ready(true)
-		elif color == global.PIECE_BLACK:
+		if color == global.PIECE_BLACK:
 			set_black_ready(true)
-		
 		if is_ready():
 			on_ready()
 			if player.is_game_creator():
-				on_turn_changed()
+				send_arbiter_message("turn")
 
 func on_arbiter_event_turn(data):
 	append_chat_message("arbiter", data["message"], data["timestamp"])
-	configure_next_turn()
+	if data.has("info") and data["info"].has("color"):
+		var next = data["info"]["color"].split(",", false)[0]
+		setup_next_turn(next)
+
+func setup_next_turn(color):
+	if color == global.PIECE_WHITE:
+		turn = TURN_WHITE
+	elif color == global.PIECE_BLACK:
+		turn = TURN_BLACK
+	
+	var piece = get_current_piece()
+	var owner = get_piece_owner(piece)
+	if owner == opponent:
+		freeze(player.get_color())
+	else:
+		unfreeze(player.get_color())
