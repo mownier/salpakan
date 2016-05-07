@@ -11,6 +11,8 @@ onready var board = get_node("board")
 onready var black_start = get_node("black_start")
 onready var white_start = get_node("white_start")
 onready var messages = get_node("messages")
+onready var lobby_id = global.get_lobby_id()
+onready var game_id = global.get_game_id()
 
 var player
 var opponent
@@ -20,17 +22,21 @@ var pre_winner
 var winner
 var turn
 
+var firebase
+
 var phase = PHASE_INITIAL
 var black_ready = false
 var white_ready = false
 
 func _ready():
+	firebase = global.create_firebase()
 	player = global.get_player()
 	opponent = global.get_opponent()
 
-	seed(OS.get_unix_time())
-	turn = randi() % 2
 	board.connect("board_on_drop", self, "board_on_drop")
+	firebase.connect("firebase_on_success", self, "firebase_on_success")
+	firebase.connect("firebase_on_error", self, "firebase_on_error")
+	firebase.connect("firebase_on_stream", self, "firebase_on_stream")
 	
 	setup_start_buttons()
 	setup_black()
@@ -38,6 +44,10 @@ func _ready():
 	
 	reveal(opponent.get_color(), false)
 	freeze(opponent.get_color())
+	disable_start(opponent.get_color())
+	
+	var path = get_game_path()
+	firebase.listen(path)
 
 func setup_start_buttons():
 	black_start.connect("pressed", self, "on_black_ready")
@@ -56,22 +66,40 @@ func setup_start_buttons():
 	white_start.set_pos(Vector2(x, y))
 
 func on_black_ready():
-	black_ready = true
-	black_start.set_text("READY")
-	black_start.set_ignore_mouse(true)
-	freeze(global.PIECE_BLACK)
-	check_ready()
+	set_black_ready(true)
+	send_arbiter_message("ready", global.PIECE_BLACK)
 
 func on_white_ready():
-	white_ready = true
-	white_start.set_text("READY")
-	white_start.set_ignore_mouse(true)
-	freeze(global.PIECE_WHITE)
-	check_ready()
+	set_white_ready(true)
+	send_arbiter_message("ready", global.PIECE_WHITE)
 
-func check_ready():
-	if is_ready():
-		on_ready()
+func set_black_ready(ready):
+	var ignore = false
+	var text = "END PHASE"
+	if ready:
+		ignore = true
+		text = "READY"
+		freeze(global.PIECE_BLACK)
+	else:
+		unfreeze(global.PIECE_BLACK)
+	
+	black_ready = ready
+	black_start.set_text(text)
+	black_start.set_ignore_mouse(ignore)
+
+func set_white_ready(ready):
+	var ignore = false
+	var text = "END PHASE"
+	if ready:
+		ignore = true
+		text = "READY"
+		freeze(global.PIECE_WHITE)
+	else:
+		unfreeze(global.PIECE_WHITE)
+	
+	white_ready = ready
+	white_start.set_text(text)
+	white_start.set_ignore_mouse(ignore)
 
 func freeze(color):
 	get_tree().call_group(0, color, "enable_drag", false)
@@ -84,11 +112,13 @@ func on_ready():
 	black_start.set_hidden(true)
 	white_start.set_hidden(true)
 	
-	var piece = get_current_piece()
-	if piece == player.get_color():
-		unfreeze(piece)
+	seed(OS.get_unix_time())
+	turn = randi() % 2
 	
-	send_arbiter_message("turn")
+	var piece = get_current_piece()
+	var owner = get_piece_owner(piece)
+	if owner == player:
+		unfreeze(piece)
 
 func get_current_piece():
 	if is_white_turn():
@@ -225,7 +255,7 @@ func piece_on_clash(piece1, piece2):
 				winner = global.PIECE_WHITE
 				on_winner_determined()
 			else:
-				configure_next_turn()
+				on_turn_changed()
 
 func board_on_drop(pos, piece):
 	if is_valid_pos(pos, piece):
@@ -246,7 +276,7 @@ func board_on_drop(pos, piece):
 							new_pos.y == 64):
 							pre_winner = piece.get_type()
 					
-					configure_next_turn()
+					on_turn_changed()
 					
 				else:
 					winner = pre_winner
@@ -358,8 +388,6 @@ func configure_next_turn():
 	if next == player.get_color():
 		unfreeze(next)
 	turn = get_next_turn()
-	
-	on_turn_changed()
 
 func has_pre_winner():
 	if (pre_winner != null and 
@@ -375,12 +403,14 @@ func has_winner():
 	else:
 		return false
 
-func send_arbiter_message(event):
+func send_arbiter_message(event, color=null):
 	var message = ""
+	var info = {}
 	
 	if event == "turn":
-		var current = get_current_piece().to_upper()
-		message = str(current, "'s turn")
+		var next = get_next_piece()
+		message = str(next.to_upper(), "'s turn")
+		info["color"] = next
 		
 	elif event == "win":
 		if has_winner():
@@ -397,14 +427,31 @@ func send_arbiter_message(event):
 		var piece = eliminated.to_upper()
 		message = str(piece, " is eliminated")
 		
+	elif event == "ready":
+		if color != null and (color == global.PIECE_WHITE or color == global.PIECE_BLACK):
+			var owner = get_piece_owner(color)
+			message = str(owner.get_name(), " is ready")
+			info["color"] = owner.get_color()
+	
 	if not message.empty():
 		var sender = "arbiter"
 		var timestamp = OS.get_unix_time()
-		send_message(sender, timestamp, message)
+		var evt = str(event,",",timestamp)
+		send_message(sender, timestamp, message, evt, info)
 
-func send_message(sender, timestamp, message):
-	var text = str("[", sender, "]: ", message)
-	messages.add_item(text, null, false)
+func send_message(sender, timestamp, message, event=null, info=null):
+	if sender == "arbiter":
+		var data = {
+			"message": message,
+			"timestamp": timestamp,
+			"event": event
+		}
+		if not info.empty():
+			data["info"] = info
+		var path = get_arbiter_path()
+		firebase.patch(path, data.to_json())
+	else:
+		pass
 
 func on_winner_determined():
 	freeze(player.get_color())
@@ -424,3 +471,78 @@ func on_game_draw():
 
 func on_turn_changed():
 	send_arbiter_message("turn")
+
+func get_piece_owner(color):
+	if player.get_color() == color:
+		return player
+	elif opponent.get_color() == color:
+		return opponent
+
+func disable_start(color, disable=true):
+	if color == global.PIECE_WHITE:
+		white_start.set_ignore_mouse(disable)
+	elif color == global.PIECE_BLACK:
+		black_start.set_ignore_mouse(disable)
+
+func get_lobby_path():
+	return str("/lobby/", lobby_id)
+
+func get_game_path():
+	return str(get_lobby_path(), "/game/", game_id)
+
+func get_arbiter_path():
+	return str(get_game_path(), "/arbiter")
+
+func get_move_path():
+	return str(get_game_path(), "/move")
+
+func firebase_on_success(firebase, request, info):
+	pass
+
+func firebase_on_error(firebase, object, error):
+	pass
+
+func firebase_on_stream(firebase, source, event, data):
+	if data == "null":
+		return
+	
+	var info = Dictionary()
+	info.parse_json(data)
+	
+	var path = info["path"]
+	if path == "/move":
+		pass
+	elif path == "/arbiter":
+		if info["data"].has("event"):
+			var arbiter_data = info["data"]
+			var event = arbiter_data["event"].split(",", false)[0]
+			var callback
+			if event == "ready":
+				callback = "on_arbiter_event_ready"
+			elif event == "turn":
+				callback = "on_arbiter_event_turn"
+			
+			if callback != null:
+				call_deferred("on_arbiter_event_ready", Dictionary(arbiter_data))
+
+func append_chat_message(sender, message, timestamp):
+	var text = str("[", sender, "]: ", message)
+	messages.add_item(text, null, false)
+
+func on_arbiter_event_ready(data):
+	append_chat_message("arbiter", data["message"], data["timestamp"])
+	if data.has("info") and data["info"].has("color"):
+		var color = data["info"]["color"]
+		if color == global.PIECE_WHITE:
+			set_white_ready(true)
+		elif color == global.PIECE_BLACK:
+			set_black_ready(true)
+		
+		if is_ready():
+			on_ready()
+			if player.is_game_creator():
+				on_turn_changed()
+
+func on_arbiter_event_turn(data):
+	append_chat_message("arbiter", data["message"], data["timestamp"])
+	configure_next_turn()
