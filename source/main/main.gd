@@ -36,7 +36,9 @@ func on_join():
 	var lobby = selected_lobby["id"]
 	var id = global.get_connection_id()
 	var player = global.get_connected_player()
-	var data = {id: {"player": player}}
+	var data = {id: {"id": id, "player": player}}
+	if selected_lobby["connected"].has(id):
+		data[id]["creator"] = true
 	var path = str("/lobby/", lobby, "/connected")
 	join_request = firebase.patch(path, data.to_json())
 
@@ -44,7 +46,7 @@ func on_create():
 	var lobby_id = str("lobby_", OS.get_unix_time())
 	var id = global.get_connection_id()
 	var player = global.get_connected_player()
-	var data = {"id": lobby_id, "connected": {id: {"player": player}}}
+	var data = {"id": lobby_id, "connected": {id: {"id": id, "player": player, "creator": true}}}
 	var path = str("/lobby/", lobby_id)
 	create_request = firebase.patch(path, data.to_json())
 
