@@ -5,17 +5,26 @@ const PHASE_INITIAL = 0
 const PHASE_START = 1
 const TURN_WHITE = 0
 const TURN_BLACK = 1
+const CHAT_COMMANDS = [
+	":new game:",
+	":back:"
+]
 
 onready var global = get_node("/root/global")
 onready var board = get_node("board")
 onready var black_start = get_node("black_start")
 onready var white_start = get_node("white_start")
 onready var messages = get_node("messages")
+onready var message = get_node("message")
+onready var send = get_node("send")
 onready var lobby_id = global.get_lobby_id()
 onready var game_id = global.get_game_id()
 
+var Arbiter = preload("res://source/common/arbiter.gd")
+
 var player
 var opponent
+var arbiter
 
 var eliminated
 var pre_winner
@@ -32,7 +41,9 @@ func _ready():
 	firebase = global.create_firebase()
 	player = global.get_player()
 	opponent = global.get_opponent()
-
+	arbiter = Arbiter.new(firebase, get_arbiter_path())
+	
+	send.connect("pressed", self, "on_send")
 	board.connect("board_on_drop", self, "board_on_drop")
 	firebase.connect("firebase_on_success", self, "firebase_on_success")
 	firebase.connect("firebase_on_error", self, "firebase_on_error")
@@ -66,10 +77,10 @@ func setup_start_buttons():
 	white_start.set_pos(Vector2(x, y))
 
 func on_black_ready():
-	send_arbiter_message("ready", global.PIECE_BLACK)
+	arbiter.on_ready(global.PIECE_BLACK)
 
 func on_white_ready():
-	send_arbiter_message("ready", global.PIECE_WHITE)
+	arbiter.on_ready(global.PIECE_WHITE)
 
 func set_black_ready(ready):
 	var ignore = false
@@ -151,6 +162,9 @@ func is_white_turn():
 func is_black_turn():
 	return turn == TURN_BLACK
 
+func get_pieces(color):
+	return get_tree().get_nodes_in_group(color)
+
 func setup_pieces(type, y_sign, row_start, row_increment):
 	var pieces = global.get_player_pieces(type)
 	var row = row_start
@@ -183,6 +197,7 @@ func piece_on_swap(piece1, piece2):
 	if is_initial_phase():
 		var pos1 = piece1.get_pos()
 		var pos2 = piece2.get_pos()
+		arbiter.on_swap(piece1.get_type(), pos1, pos2)
 		piece1.set_pos(pos2)
 		piece2.set_pos(pos1)
 
@@ -194,17 +209,17 @@ func piece_on_clash(piece1, piece2):
 		# Flag vs Flag: The aggressive player will win.
 		if piece2.get_rank() == 1 and piece1.get_rank() == 1:
 			winner = piece2.get_type()
-			on_winner_determined()
+			game_on_win()
 			
 		# Flag vs Other: The neutral player will win.
 		elif piece2.get_rank() == 1:
 			winner = piece1.get_type()
-			on_winner_determined()
+			game_on_win()
 			
 		# Other vs Flag: The aggressive player will win.
 		elif piece1.get_rank() == 1:
 			winner = piece2.get_type()
-			on_winner_determined()
+			game_on_win()
 			
 		else:
 			# If the neutral piece is eliminated, the postiion
@@ -213,73 +228,78 @@ func piece_on_clash(piece1, piece2):
 			
 			# Same rank: They are both out of the game.
 			if piece2.get_rank() == piece1.get_rank():
+				game_on_split(piece1.get_type(), piece2.get_type(), piece1.get_pos(), piece2.get_pos())
 				piece2.queue_free()
 				piece1.queue_free()
-				on_clash_split()
 				
 			# Spy vs Private: Spy will be eliminated.
 			elif piece2.get_rank() == 15 and piece1.get_rank() == 2:
-				eliminated = piece2.get_type()
+				game_on_eliminated(piece1.get_type(), piece2.get_type(), piece1.get_pos(), piece2.get_pos())
 				piece2.queue_free() 
-				on_clash_eliminated()
 				
 			# Private vs Spy: Spy will be eliminated.
 			elif piece2.get_rank() == 2 and piece1.get_rank() == 15:
+				game_on_eliminated(piece2.get_type(), piece1.get_type(), piece2.get_pos(), piece1.get_pos())
 				piece2.set_pos(piece1.get_pos())
-				eliminated = piece1.get_type()
 				piece1.queue_free()
-				on_clash_eliminated()
 				
 			# Low rank vs High rank: Low rank will be eliminated.
 			elif piece2.get_rank() < piece1.get_rank():
-				eliminated = piece2.get_type()
+				game_on_eliminated(piece1.get_type(), piece2.get_type(), piece1.get_pos(), piece2.get_pos())
 				piece2.queue_free()
-				on_clash_eliminated()
 				
 			# High rank vs Low rank: Low rank will be eliminated.
 			elif piece2.get_rank() > piece1.get_rank():
+				game_on_eliminated(piece2.get_type(), piece1.get_type(), piece2.get_pos(), piece1.get_pos())
 				piece2.set_pos(piece1.get_pos())
-				eliminated = piece1.get_type()
 				piece1.queue_free()
-				on_clash_eliminated()
 			
 			if (not has_pieces(global.PIECE_WHITE) and 
 				not has_pieces(global.PIECE_BLACK)):
-				on_game_draw()
+				game_on_draw()
 			elif not has_pieces(global.PIECE_WHITE):
 				winner = global.PIECE_BLACK
-				on_winner_determined()
+				game_on_win()
 			elif not has_pieces(global.PIECE_BLACK):
 				winner = global.PIECE_WHITE
-				on_winner_determined()
-			else:
-				on_turn_changed()
+				game_on_win()
 
 func board_on_drop(pos, piece):
 	if is_valid_pos(pos, piece):
 		var new_pos = get_proper_pos(pos)
-		if (is_initial_phase() or 
-			(is_start_phase() and is_adjacent(piece.get_pos(), new_pos))):
+		
+		if is_initial_phase():
+			arbiter.on_arrange(piece.get_type(), piece.get_pos(), new_pos)
 			piece.set_pos(new_pos)
-			on_piece_moved()
 			
-			if is_start_phase():
-				
+		elif is_start_phase():
+			if is_adjacent(piece.get_pos(), new_pos):
 				if not has_pre_winner():
 					# If Flag is placed at the 1st row relative to
 					# the opponents place, the color is considered 
 					# as pre-winner. If there's nothing that will
-					# challeng, the color wins.
+					# challenge, the color wins.
 					if piece.get_rank() == 1:
-						if (new_pos.y == board.get_size().height - 64 - piece.get_size().height or
-							new_pos.y == 64):
+						if can_have_pre_winner(new_pos):
 							pre_winner = piece.get_type()
 					
-					on_turn_changed()
+					game_on_move(piece.get_pos(), new_pos)
+					piece.set_pos(new_pos)
 					
 				else:
 					winner = pre_winner
-					on_winner_determined()
+					game_on_win()
+
+func can_have_pre_winner(flag_pos):
+	var board_height = board.get_size().height
+	var piece_height = 64
+	var y_offset = 64
+	var top_endpoint = y_offset
+	var bottom_endpoint = board_height - y_offset - piece_height
+	if flag_pos.y == bottom_endpoint or flag_pos.y == top_endpoint:
+		return true
+	else:
+		return false
 
 func is_adjacent(pos1, pos2):
 	var same_y = pos1.y == pos2.y
@@ -375,7 +395,7 @@ func get_proper_pos(pos):
 	return Vector2(x, y)
 
 func has_pieces(color):
-	return get_tree().get_nodes_in_group(color).size() > 0
+	return get_pieces(color).size() > 0
 
 func reveal(color, show):
 	get_tree().call_group(0, color, "reveal", show)
@@ -394,78 +414,44 @@ func has_winner():
 	else:
 		return false
 
-func send_arbiter_message(event, color=null):
-	var message = ""
-	var info = {}
-	var timestamp = OS.get_unix_time()
-	
-	if event == "turn":
-		var next = get_next_piece()
-		message = str(next.to_upper(), "'s turn")
-		info["color"] = str(next, ",", timestamp)
-		
-	elif event == "win":
-		if has_winner():
-			var piece = winner.to_upper()
-			message = str(piece, " wins")
-		
-	elif event == "split":
-		message = "Clash is split"
-		
-	elif event == "draw":
-		message = "Game is draw"
-		
-	elif event == "eliminated":
-		var piece = eliminated.to_upper()
-		message = str(piece, " is eliminated")
-		
-	elif event == "ready":
-		if color != null and (color == global.PIECE_WHITE or color == global.PIECE_BLACK):
-			var owner = get_piece_owner(color)
-			message = str(owner.get_name(), " is ready")
-			info["color"] = str(owner.get_color(), ",", timestamp)
-	
-	if not message.empty():
-		var sender = "arbiter"
-		var evt = str(event,",",timestamp)
-		send_message(sender, timestamp, message, evt, info)
+func game_on_split(color1, color2, pos1, pos2):
+	var next = get_next_piece()
+	var current = get_current_piece()
+	arbiter.on_clash_split(next, current, color1, color2, pos1, pos2)
 
-func send_message(sender, timestamp, message, event=null, info=null):
-	if sender == "arbiter":
-		var data = {
-			"message": message,
-			"timestamp": timestamp,
-			"event": event
-		}
-		if not info.empty():
-			data["info"] = info
-		var path = get_arbiter_path()
-		firebase.patch(path, data.to_json())
+func game_on_eliminated(winner, loser, winner_pos, loser_pos):
+	var next = get_next_piece()
+	var current = get_current_piece()
+	arbiter.on_clash_eliminated(next, current, winner, loser, winner_pos, loser_pos)
+
+func game_on_end():
+	freeze(player.get_color())
+	reveal(opponent.get_color(), true)
+
+func game_on_move(old_pos, new_pos):
+	var next = get_next_piece()
+	var current = get_current_piece()
+	on_turn_will_change()
+	arbiter.on_piece_moved(next, current, old_pos, new_pos)
+
+func game_on_win():
+	var loser
+	if winner == global.PIECE_BLACK:
+		loser = global.PIECE_WHITE
 	else:
-		pass
+		loser = global.PIECE_BLACK
+	
+	game_on_end()
+	arbiter.on_win(winner, loser)
 
-func on_winner_determined():
-	freeze(player.get_color())
-	reveal(opponent.get_color(), true)
-	send_arbiter_message("win")
+func game_on_draw():
+	game_on_end()
+	arbiter.on_draw()
 
-func on_clash_split():
-	send_arbiter_message("split")
-
-func on_clash_eliminated():
-	send_arbiter_message("eliminated")
-
-func on_game_draw():
-	freeze(player.get_color())
-	reveal(opponent.get_color(), true)
-	send_arbiter_message("draw")
-
-func on_turn_changed():
-	freeze(get_current_piece())
-	send_arbiter_message("turn")
-
-func on_piece_moved(piece, new_pos):
-	pass
+func on_turn_will_change():
+	var current = get_current_piece()
+	if player.get_color() == current:
+		freeze(current)
 
 func get_piece_owner(color):
 	if player.get_color() == color:
@@ -488,14 +474,11 @@ func get_game_path():
 func get_arbiter_path():
 	return str(get_game_path(), "/arbiter")
 
-func get_move_path():
-	return str(get_game_path(), "/move")
-
 func firebase_on_success(firebase, request, info):
-	pass
+	print(info)
 
 func firebase_on_error(firebase, object, error):
-	pass
+	print(error)
 
 func firebase_on_stream(firebase, source, event, data):
 	if data == "null":
@@ -505,43 +488,122 @@ func firebase_on_stream(firebase, source, event, data):
 	info.parse_json(data)
 	
 	var path = info["path"]
-	if path == "/move":
-		pass
-	elif path == "/arbiter":
-		if info["data"].has("event"):
-			var arbiter_data = info["data"]
-			var event = arbiter_data["event"].split(",", false)[0]
-			var callback
-			if event == "ready":
-				callback = "on_arbiter_event_ready"
-			elif event == "turn":
-				callback = "on_arbiter_event_turn"
-			
-			if callback != null:
-				call_deferred(callback, Dictionary(arbiter_data))
+	var arbiter_data = info["data"]
+	if path == "/arbiter":
+		var event = arbiter_data["event"]
+		var callback
+		if event == "ready":
+			callback = "arbiter_on_ready"
+		elif event == "arrange":
+			callback = "arbiter_on_arrange"
+		elif event == "swap":
+			callback = "arbiter_on_swap"
+		elif event == "first_move":
+			callback = "arbiter_on_first_move"
+		elif event == "move":
+			callback = "arbiter_on_move"
+		elif event == "split":
+			callback = "arbiter_on_split"
+		elif event == "eliminated":
+			callback = "arbiter_on_eliminated"
+		elif event == "win":
+			callback = "arbiter_on_win"
+		elif event == "draw":
+			callback = "arbiter_on_draw"
+		
+		if callback != null:
+			call_deferred(callback, Dictionary(arbiter_data))
 
 func append_chat_message(sender, message, timestamp):
-	var text = str("[", sender, "]: ", message)
-	messages.add_item(text, null, false)
+	var lines = message.split("\n", false)
+	if lines.size() == 0:
+		lines.push_back(message)
+	
+	for line in lines:
+		var text = str("[", sender, "]: ", line)
+		messages.add_item(text, null, false)
 
-func on_arbiter_event_ready(data):
+func arbiter_on_ready(data):
 	append_chat_message("arbiter", data["message"], data["timestamp"])
-	if data.has("info") and data["info"].has("color"):
-		var color = data["info"]["color"].split(",", false)[0] 
-		if color == global.PIECE_WHITE:
-			set_white_ready(true)
-		if color == global.PIECE_BLACK:
-			set_black_ready(true)
-		if is_ready():
-			on_ready()
-			if player.is_game_creator():
-				send_arbiter_message("turn")
+	var info = data["info"]
+	var color = info["color"]
+	if color == global.PIECE_WHITE:
+		set_white_ready(true)
+	if color == global.PIECE_BLACK:
+		set_black_ready(true)
+	if is_ready():
+		on_ready()
+		if player.is_game_creator():
+			arbiter.on_first_move(get_current_piece())
 
-func on_arbiter_event_turn(data):
+func arbiter_on_swap(data):
+	var info = data["info"]
+	var color = info["color"]
+	if opponent.get_color() == color:
+		var pos1 = Vector2(info["pos1"]["x"], info["pos1"]["y"])
+		var pos2 = Vector2(info["pos2"]["x"], info["pos2"]["y"])
+		swap(color, pos1, pos2)
+
+func arbiter_on_arrange(data):
+	var info = data["info"]
+	var color = info["color"]
+	if opponent.get_color() == color:
+		var old_pos = Vector2(info["old_pos"]["x"], info["old_pos"]["y"])
+		var new_pos = Vector2(info["new_pos"]["x"], info["new_pos"]["y"])
+		arrange(color, old_pos, new_pos)
+
+func arbiter_on_first_move(data):
 	append_chat_message("arbiter", data["message"], data["timestamp"])
-	if data.has("info") and data["info"].has("color"):
-		var next = data["info"]["color"].split(",", false)[0]
-		setup_next_turn(next)
+	var next = data["info"]["color"]
+	setup_next_turn(next)
+
+func arbiter_on_move(data):
+	append_chat_message("arbiter", data["message"], data["timestamp"])
+	var next = data["next"]
+	var current = data["current"]
+	if opponent.get_color() == current:
+		var info = data["info"]
+		var old_pos = Vector2(info["old_pos"]["x"], info["old_pos"]["y"])
+		var new_pos = Vector2(info["new_pos"]["x"], info["new_pos"]["y"])
+		arrange(current, old_pos, new_pos)
+	setup_next_turn(next)
+
+func arbiter_on_split(data):
+	append_chat_message("arbiter", data["message"], data["timestamp"])
+	var next = data["next"]
+	var current = data["current"]
+	if opponent.get_color() == current:
+		var info = data["info"]
+		var color1 = info["color1"]
+		var color2 = info["color2"]
+		var pos1 = Vector2(info["pos1"]["x"], info["pos1"]["y"])
+		var pos2 = Vector2(info["pos2"]["x"], info["pos2"]["y"])
+		clash_split(color1, pos1)
+		clash_split(color2, pos2)
+	setup_next_turn(next)
+
+func arbiter_on_eliminated(data):
+	append_chat_message("arbiter", data["message"], data["timestamp"])
+	var next = data["next"]
+	var current = data["current"]
+	if opponent.get_color() == current:
+		var info = data["info"]
+		var win = info["win"]
+		var lose = info["lose"]
+		var win_pos = Vector2(info["win_pos"]["x"], info["win_pos"]["y"])
+		var lose_pos = Vector2(info["lose_pos"]["x"], info["lose_pos"]["y"])
+		clash_eliminate(current, win, lose, win_pos, lose_pos)
+	setup_next_turn(next)
+
+func arbiter_on_win(data):
+	append_chat_message("arbiter", data["message"], data["timestamp"])
+	if opponent.get_color() == get_current_piece():
+		game_on_end()
+
+func arbiter_on_draw(data):
+	append_chat_message("arbiter", data["message"], data["timestamp"])
+	if opponent.get_color() == get_current_piece():
+		game_on_end()
 
 func setup_next_turn(color):
 	if color == global.PIECE_WHITE:
@@ -555,3 +617,80 @@ func setup_next_turn(color):
 		freeze(player.get_color())
 	else:
 		unfreeze(player.get_color())
+
+func swap(color, pos1, pos2):
+	var pieces = get_pieces(color)
+	var piece1
+	var piece2
+	
+	for piece in pieces:
+		if piece.get_pos() == pos1 or piece.get_pos() == pos2:
+			if piece1 == null:
+				piece1 = piece
+			else:
+				piece2 = piece
+				break
+	
+	if piece1 != null and piece2 != null:
+		var pos = piece1.get_pos()
+		piece1.set_pos(piece2.get_pos())
+		piece2.set_pos(pos)
+
+func arrange(color, old_pos, new_pos):
+	var pieces = get_pieces(color)
+	for piece in pieces:
+		if piece.get_pos() == old_pos:
+			piece.set_pos(new_pos)
+			if is_start_phase() and piece.get_rank() == 1:
+				if can_have_pre_winner(new_pos):
+					pre_winner = color
+			break
+
+func clash_split(color, pos):
+	var pieces = get_pieces(color)
+	for piece in pieces:
+		if piece.get_pos() == pos:
+			piece.queue_free()
+			break
+
+func clash_eliminate(current, win, lose, win_pos, lose_pos):
+	if current == win:
+		for piece in get_pieces(win):
+			if piece.get_pos() == win_pos:
+				piece.set_pos(lose_pos)
+				break
+	
+	for piece in get_pieces(lose):
+		if piece.get_pos() == lose_pos:
+			piece.queue_free()
+			break
+
+func on_send():
+	if is_chat_valid():
+		var chat_message = get_chat_message()
+		if player.is_game_creator():
+			if is_valid_command(chat_message):
+				var cmd = chat_message.to_lower()
+				if cmd == ":new game:":
+					reload()
+				elif cmd == ":back:":
+					global.goto_lobby()
+
+func reload():
+	get_tree().reload_current_scene()
+
+func get_chat_message():
+	return message.get_text().strip_edges()
+
+func is_chat_valid():
+	return not get_chat_message().empty()
+
+func is_valid_command(command):
+	var len = command.length()
+	if len > 2:
+		if command[0] == ":" and command[len - 1] == ":":
+			var cmd = command.to_lower()
+			if CHAT_COMMANDS.find(cmd) > -1:
+				return true
+	return false
+
