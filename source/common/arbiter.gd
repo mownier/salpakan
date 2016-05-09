@@ -148,6 +148,3 @@ func on_arrange(color, old_pos, new_pos):
 		}
 	}
 	on_pre_game(event, message, info)
-
-func on_new_game():
-	pass
