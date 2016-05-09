@@ -1,3 +1,4 @@
+tool
 
 extends Node2D
 
@@ -76,7 +77,7 @@ func on_receive_message(message):
 		var info = message[key]
 		var content = info["content"]
 		var player = info["player"]
-		var text = str("[", player, "]: ", content)
+		var text = str("[", player, "]:", content)
 		messages.add_item(text, null, false)
 
 func on_player_connected(connected, initial):
@@ -112,9 +113,23 @@ func on_send():
 		var conn_id = global.get_connection_id()
 		var player = global.get_connected_player()
 		var timestamp = OS.get_unix_time()
-		var data = {conn_id: {"id": conn_id, "player": player, "timestamp": timestamp, "content": content}}
-		firebase.patch(path, data.to_json())
+#		var data = {conn_id: {"id": conn_id, "player": player, "timestamp": timestamp, "content": content}}
+#		firebase.patch(path, data.to_json())
+#		message.clear()
+		
+		var id = "conn_12345"
+		var sender = "kangaroo"
+		var data = {
+			"key": {
+				"id": id,
+				"content": content,
+				"player": sender,
+				"timestamp": timestamp
+			}
+		}
 		message.clear()
+		on_receive_message(data)
+		
 
 func on_start():
 	if can_start():
