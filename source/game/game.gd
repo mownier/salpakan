@@ -7,7 +7,7 @@ const TURN_WHITE = 0
 const TURN_BLACK = 1
 const CHAT_COMMANDS = [
 	":new game:",
-	":back:"
+	":quit:"
 ]
 
 onready var global = get_node("/root/global")
@@ -474,6 +474,12 @@ func get_game_path():
 func get_arbiter_path():
 	return str(get_game_path(), "/arbiter")
 
+func get_chat_path():
+	return str(get_game_path(), "/chat")
+
+func get_status_path():
+	return str(get_game_path(), "/status")
+
 func firebase_on_success(firebase, request, info):
 	print(info)
 
@@ -488,8 +494,8 @@ func firebase_on_stream(firebase, source, event, data):
 	info.parse_json(data)
 	
 	var path = info["path"]
-	var arbiter_data = info["data"]
 	if path == "/arbiter":
+		var arbiter_data = info["data"]
 		var event = arbiter_data["event"]
 		var callback
 		if event == "ready":
@@ -513,6 +519,19 @@ func firebase_on_stream(firebase, source, event, data):
 		
 		if callback != null:
 			call_deferred(callback, Dictionary(arbiter_data))
+		
+	elif path == "/chat":
+		var chat_data = info["data"]
+		var message = chat_data["message"]
+		var sender = chat_data["sender"]
+		var timestamp = chat_data["timestamp"]
+		call_deferred("chat_on_receive", sender, message, timestamp)
+		
+	elif path == "/status":
+		var status_data = info["data"]
+		var status = status_data["status"]
+		var timestamp = status_data["timestamp"]
+		call_deferred("game_on_update", status, timestamp)
 
 func append_chat_message(sender, message, timestamp):
 	var lines = message.split("\n", false)
@@ -668,16 +687,50 @@ func clash_eliminate(current, win, lose, win_pos, lose_pos):
 func on_send():
 	if is_chat_valid():
 		var chat_message = get_chat_message()
-		if player.is_game_creator():
-			if is_valid_command(chat_message):
-				var cmd = chat_message.to_lower()
-				if cmd == ":new game:":
-					reload()
-				elif cmd == ":back:":
-					global.goto_lobby()
+		if is_valid_command(chat_message) and player.is_game_creator():
+			var cmd = chat_message.to_lower()
+			if cmd == ":new game:":
+				game_on_reload()
+			elif cmd == ":quit:":
+				game_on_quit()
+			
+		else:
+			send_chat_message(player.get_name(), chat_message)
+			pass
 
-func reload():
-	get_tree().reload_current_scene()
+func send_game_status(status):
+	var timestamp = OS.get_unix_time()
+	var data = {
+		"status": "new game",
+		"timestamp": timestamp
+	}
+	var path = get_status_path()
+	firebase.put(path, data.to_json())
+
+func game_on_reload():
+	send_game_status("new game")
+
+func game_on_quit(cmd):
+	send_game_status("quit")
+
+func game_on_update(status, timestamp):
+	if status == "new game":
+		get_tree().reload_current_scene()
+	elif status == "quit":
+		global.goto_lobby()
+
+func send_chat_message(sender, msg):
+	var timestamp = OS.get_unix_time()
+	var data = {
+		"sender": sender,
+		"message": msg,
+		"timestamp": timestamp
+	}
+	var path = get_chat_path()
+	firebase.put(path, data.to_json())
+
+func chat_on_receive(sender, message, timestamp):
+	append_chat_message(sender, message, timestamp)
 
 func get_chat_message():
 	return message.get_text().strip_edges()
