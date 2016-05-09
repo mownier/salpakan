@@ -2,7 +2,7 @@
 extends Node2D
 
 onready var global = get_node("/root/global")
-onready var connect = get_node("container/connect")
+onready var connect = get_node("connect")
 onready var player_name = get_node("container/player_name")
 onready var firebase_url = get_node("container/firebase_url")
 onready var error_dialog = get_node("error_dialog")
