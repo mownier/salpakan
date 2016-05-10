@@ -52,7 +52,7 @@ func on_create():
 
 func on_disconnect():
 	var connection_id = global.get_connection_id()
-	var path = str("/connections/", connection_id)
+	var path = str("/connection/", connection_id)
 	disconnect_request = firebase.delete(path)
 
 func on_refresh():
