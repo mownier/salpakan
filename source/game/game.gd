@@ -539,7 +539,7 @@ func append_chat_message(sender, message, timestamp):
 		lines.push_back(message)
 	
 	for line in lines:
-		var text = str("[", sender, "]: ", line)
+		var text = str("[", sender, "]:", line)
 		messages.add_item(text, null, false)
 
 func arbiter_on_ready(data):
@@ -696,7 +696,8 @@ func on_send():
 			
 		else:
 			send_chat_message(player.get_name(), chat_message)
-			pass
+		
+		message.clear()
 
 func send_game_status(status):
 	var timestamp = OS.get_unix_time()
@@ -726,8 +727,9 @@ func send_chat_message(sender, msg):
 		"message": msg,
 		"timestamp": timestamp
 	}
-	var path = get_chat_path()
-	firebase.put(path, data.to_json())
+#	var path = get_chat_path()
+#	firebase.put(path, data.to_json())
+	append_chat_message("kangaroo", msg, timestamp)
 
 func chat_on_receive(sender, message, timestamp):
 	append_chat_message(sender, message, timestamp)
