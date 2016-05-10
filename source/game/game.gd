@@ -702,7 +702,7 @@ func on_send():
 func send_game_status(status):
 	var timestamp = OS.get_unix_time()
 	var data = {
-		"status": "new game",
+		"status": status,
 		"timestamp": timestamp
 	}
 	var path = get_status_path()
@@ -711,7 +711,7 @@ func send_game_status(status):
 func game_on_reload():
 	send_game_status("new game")
 
-func game_on_quit(cmd):
+func game_on_quit():
 	send_game_status("quit")
 
 func game_on_update(status, timestamp):
