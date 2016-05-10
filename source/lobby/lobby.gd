@@ -25,6 +25,11 @@ func _ready():
 	var path = get_lobby_path()
 	firebase.listen(path)
 
+func hide_creator_controls(hide):
+	start.set_hidden(hide)
+	piece_selector.set_hidden(hide)
+	opponent_selector.set_hidden(hide)
+
 func get_lobby_path():
 	return str("/lobby/", lobby_id)
 
@@ -98,10 +103,7 @@ func on_player_connected(connected, initial):
 			if initial:
 				if connection.has("creator") and connection["creator"]:
 					game_creator_id = id
-				else:
-					start.set_hidden(true)
-					piece_selector.set_hidden(true)
-					opponent_selector.set_hidden(true)
+					hide_creator_controls(false)
 
 func on_back():
 	global.goto_main()
@@ -113,22 +115,22 @@ func on_send():
 		var conn_id = global.get_connection_id()
 		var player = global.get_connected_player()
 		var timestamp = OS.get_unix_time()
-#		var data = {conn_id: {"id": conn_id, "player": player, "timestamp": timestamp, "content": content}}
-#		firebase.patch(path, data.to_json())
-#		message.clear()
-		
-		var id = "conn_12345"
-		var sender = "kangaroo"
-		var data = {
-			"key": {
-				"id": id,
-				"content": content,
-				"player": sender,
-				"timestamp": timestamp
-			}
-		}
+		var data = {conn_id: {"id": conn_id, "player": player, "timestamp": timestamp, "content": content}}
+		firebase.patch(path, data.to_json())
 		message.clear()
-		on_receive_message(data)
+#		
+#		var id = "conn_12345"
+#		var sender = "kangaroo"
+#		var data = {
+#			"key": {
+#				"id": id,
+#				"content": content,
+#				"player": sender,
+#				"timestamp": timestamp
+#			}
+#		}
+#		message.clear()
+#		on_receive_message(data)
 		
 
 func on_start():

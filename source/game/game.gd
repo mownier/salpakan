@@ -727,9 +727,9 @@ func send_chat_message(sender, msg):
 		"message": msg,
 		"timestamp": timestamp
 	}
-#	var path = get_chat_path()
-#	firebase.put(path, data.to_json())
-	append_chat_message("kangaroo", msg, timestamp)
+	var path = get_chat_path()
+	firebase.put(path, data.to_json())
+#	append_chat_message("kangaroo", msg, timestamp)
 
 func chat_on_receive(sender, message, timestamp):
 	append_chat_message(sender, message, timestamp)
