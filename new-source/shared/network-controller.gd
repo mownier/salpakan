@@ -10,8 +10,19 @@ signal network_controller_on_assigned_piece_color(color)
 signal network_controller_on_enemy_connected_with(color)
 
 signal network_controller_on_game_started()
+signal network_controller_on_game_over_with(winner, color)
+signal network_controller_on_stalemate()
+
 signal network_controller_on_enemy_ready_with(slots)
 signal network_controller_on_first_move_with(color)
+signal network_controller_on_next_move_with(color)
+
+signal network_controller_on_moved_piece_from(current_slot, destination_slot)
+signal network_controller_on_removed_neutral_piece_with(vacant_slot, occupied_slot)
+signal network_controller_on_removed_aggressive_piece_with(slot)
+signal network_controller_on_both_pieces_removed_with(current_slot, destination_slot)
+
+signal network_controller_on_reveal_enemy_pieces_with(slots)
 
 func _ready():
 	get_tree().connect("network_peer_connected"   , self, "player_on_connected"        )
@@ -53,6 +64,9 @@ func connect_to_LAN_server_with(host, port):
 func notify_to_start_the_game():
 	rpc("start_game")
 
+func notify_on_moved_piece_with(color, current_slot, destination_slot):
+	rpc("process_moved_piece_with", color, current_slot, destination_slot)
+
 func register_initial_board_slots_for(color, slots):
 	rpc("register_initial_board_slots_for", color, slots)
 
@@ -73,3 +87,27 @@ slave func on_enemy_ready_with(slots):
 
 slave func on_first_move_with(color):
 	emit_signal("network_controller_on_first_move_with", color)
+
+slave func on_next_move_with(color):
+	emit_signal("network_controller_on_next_move_with", color)
+
+slave func on_moved_piece_from(current_slot, destination_slot, color):
+	emit_signal("network_controller_on_moved_piece_from", current_slot, destination_slot)
+
+slave func on_both_pieces_removed_with(current_slot, destination_slot):
+	emit_signal("network_controller_on_both_pieces_removed_with", current_slot, destination_slot)
+
+slave func on_removed_neutral_piece_with(vacant_slot, occupied_slot):
+	emit_signal("network_controller_on_removed_neutral_piece_with", vacant_slot, occupied_slot)
+
+slave func on_removed_aggressive_piece_with(slot):
+	emit_signal("network_controller_on_removed_aggressive_piece_with", slot)
+
+slave func on_game_over_with(winner, color):
+	emit_signal("network_controller_on_game_over_with", winner, color)
+	
+slave func on_reveal_enemy_pieces_with(slots):
+	emit_signal("network_controller_on_reveal_enemy_pieces_with", slots)
+
+slave func on_stalemate():
+	emit_signal("network_controller_on_stalemate")

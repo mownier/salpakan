@@ -42,6 +42,8 @@ enum BOARD_SLOT_STATE {
 
 const PIECES_GROUP = "pieces"
 
+var piece_scene = preload("res://new-source/game/piece-scene.tscn")
+
 var board_state = BOARD_STATE.setting_up_pieces
 var board_slots = []
 var white_piece_appearance = PIECE_APPEARANCE.revealed
@@ -95,11 +97,10 @@ func set_initial_occupied_board_slots_for(piece_color, slots):
 	for node in get_tree().get_nodes_in_group(group):
 		node.queue_free()
 	
-	var piece_scene = preload("res://new-source/game/piece-scene.tscn")
-	
 	for slot in slots:
 		var position = Vector2(slot.x * piece_width, slot.y * piece_height)
 		var piece = piece_scene.instance()
+		piece.connect("piece_on_clash", self, "piece_on_clash")
 		piece.color = piece_color
 		piece.is_cover_texture_enabled = true
 		piece.set_position(position)
@@ -195,6 +196,34 @@ func setup_pieces_with(color, y_offset):
 			x = 0
 			y += 1
 
+func reveal_black_pieces_in(slots):
+	reveal_pieces_with(PIECE_COLOR.black, slots)
+
+func reveal_white_pieces_in(slots):
+	reveal_pieces_with(PIECE_COLOR.white, slots)
+
+func reveal_pieces_with(color, slots):
+	var group = group_for(color)
+	get_tree().call_group(group, "queue_free")
+	var ranks = []
+	for slot in slots:
+		if ranks.has(int(slot.z)): continue
+		ranks.append(int(slot.z))
+	var pieces = create_pieces_with(color)
+	for piece in pieces:
+		if not ranks.has(int(piece.rank)): continue
+		for i in range(slots.size()):
+			var slot = slots[i]
+			if slot.z != piece.rank: 
+				continue
+			var position = Vector2(slot.x * piece_width, slot.y * piece_height)
+			piece.set_position(position)
+			piece.add_to_group(group)
+			piece.add_to_group(PIECES_GROUP)
+			add_child(piece)
+			slots.remove(i)
+			break
+
 func change_state_to_game_started():
 	board_state = BOARD_STATE.game_started
 
@@ -212,7 +241,7 @@ func piece_on_swap(piece1, piece2):
 			piece2.set_position(pos1)
 
 func piece_on_clash(piece1, piece2):
-	match board_state:
+	match int(board_state):
 		BOARD_STATE.game_started:
 			move_piece_on_game_started_to(piece1.get_position(), piece2)
 
@@ -276,7 +305,7 @@ func move_piece_on_game_started_to(position, piece):
 	if distance_x > 1 || distance_y > 1 || (distance_x >= 1 && distance_y >= 1): return
 	
 	var slot = Vector2(destination_slot.x, destination_slot.y)
-	emit_signal("board_on_moved_piece", piece.rank, piece.color, current_slot, destination_slot)
+	emit_signal("board_on_moved_piece", piece.color, current_slot, destination_slot)
 
 func move_white_piece_from(current_slot, destination_slot):
 	move_piece_with(PIECE_COLOR.white, current_slot, destination_slot)
@@ -285,9 +314,12 @@ func move_black_piece_from(current_slot, destination_slot):
 	move_piece_with(PIECE_COLOR.black, current_slot, destination_slot)
 
 func move_piece_with(color, current_slot, destination_slot):
+	move_piece_from(current_slot, destination_slot, group_for(color))
+
+func move_piece_from(current_slot, destination_slot, group = PIECES_GROUP):
 	var old_position = Vector2(current_slot.x * piece_width, current_slot.y * piece_height)
 	var new_position = Vector2(destination_slot.x * piece_width, destination_slot.y * piece_height)
-	var pieces = get_tree().get_nodes_in_group(group_for(color))
+	var pieces = get_tree().get_nodes_in_group(group)
 	for piece in pieces:
 		if piece.get_position() == old_position:
 			piece.set_position(new_position)
