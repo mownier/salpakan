@@ -7,12 +7,16 @@ onready var black_status_label = board.get_node("black_status_label")
 func _ready():
 	white_status_label.hide()
 	black_status_label.hide()
+	
 	network_controller.connect("network_controller_on_enemy_ready_with", self, "on_enemy_ready_with")
 	network_controller.connect("network_controller_on_first_move_with", self, "on_first_move_with")
 	network_controller.connect("network_controller_on_moved_piece_from", self, "on_moved_piece_from")
 	network_controller.connect("network_controller_on_next_move_with", self, "on_next_move_with")
 	network_controller.connect("network_controller_on_game_over_with", self, "on_game_over_with")
 	network_controller.connect("network_controller_on_reveal_enemy_pieces_with", self, "on_reveal_enemy_pieces_with")
+	network_controller.connect("network_controller_on_both_pieces_removed_with", self, "on_both_pieces_removed_with")
+	network_controller.connect("network_controller_on_removed_aggressive_piece_with", self, "on_removed_aggressive_piece_with")
+	network_controller.connect("network_controller_on_removed_neutral_piece_with", self, "on_removed_neutral_piece_with")
 	
 	board.connect("board_on_moved_piece", self, "board_on_moved_piece_with")
 	
@@ -103,3 +107,13 @@ func on_reveal_enemy_pieces_with(slots):
 		
 	board.disable_black_pieces()
 	board.disable_white_pieces()
+
+func on_both_pieces_removed_with(current_slot, destination_slot):
+	board.remove_pieces_in([current_slot, destination_slot])
+
+func on_removed_aggressive_piece_with(slot):
+	board.remove_pieces_in([slot])
+
+func on_removed_neutral_piece_with(vacant_slot, occupied_slot):
+	board.remove_pieces_in([occupied_slot])
+	board.move_piece_from(vacant_slot, occupied_slot)

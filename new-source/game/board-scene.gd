@@ -339,6 +339,21 @@ func remove_piece_with(color, slot):
 			piece.queue_free()
 			break
 
+func remove_pieces_in(slots):
+	var positions = []
+	for slot in slots:
+		var position = Vector2(slot.x * piece_width, slot.y * piece_height)
+		positions.append(position)
+	for piece in get_tree().get_nodes_in_group(PIECES_GROUP):
+		for i in range(positions.size()):
+			var position = positions[i]
+			if piece.get_position() == position:
+				piece.queue_free()
+				positions.remove(i)
+				break
+		if positions.size() == 0:
+			break
+
 func create_pieces_with(piece_color):
 	var piece = preload("res://new-source/game/piece-scene.tscn")
 	var pieces = []
